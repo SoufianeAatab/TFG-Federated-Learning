@@ -6,7 +6,6 @@
 #include <stdint.h>
 #include <Arduino.h>
 
-
 typedef uint8_t u8;
 typedef uint16_t u16;
 typedef uint32_t u32;
@@ -22,31 +21,26 @@ typedef double f64;
 
 typedef uint32_t bool32;
 
-struct subscript{
-    u32 row;
-    u32 col;
+struct MemoryArena{
+    size_t used;
+    size_t size;
+    u8 *base;
 };
 
-struct memory_arena{
-    size_t Used;
-    size_t Size;
-    u8 *Base;
-};
-static memory_arena MemoryArena = {};
+static MemoryArena memoryArena = {};
 
-inline f32 *PushSize(memory_arena *Arena, size_t SizeToReserve)
+inline f32 *pushSize(MemoryArena *arena, size_t sizeToReserve)
 {   
-    // std::cout << "want to reserve"<< SizeToReserve << "\n";
-    assert(Arena->Used + SizeToReserve <= Arena->Size);
-    void *Result = Arena->Base + Arena->Used;
-    Arena->Used += SizeToReserve;
-    return (f32*)Result;
+    assert(arena->used + sizeToReserve <= arena->size);
+    void *result = arena->base + arena->used;
+    arena->used += sizeToReserve;
+    return (f32*)result;
 }
 
-void InitMemory(u32 Size){
-    MemoryArena.Base = (u8 *)malloc(Size);
-    MemoryArena.Size = Size;
-    MemoryArena.Used = 0;
+void initMemory(u32 size){
+    memoryArena.base = (u8 *)malloc(size);
+    memoryArena.size = size;
+    memoryArena.used = 0;
 }
 
 struct M{
@@ -72,20 +66,20 @@ struct M{
     }
 
     static M ones(u32 rows, u32 cols){
-        f32* data = (f32*) PushSize(&MemoryArena, rows*cols*sizeof(f32));
+        f32* data = (f32*) pushSize(&memoryArena, rows*cols*sizeof(f32));
         memset(data,1, rows*cols);
         M o(data, rows, cols);
         return o;
     }
 
     static M zeros(u32 rows, u32 cols){
-        f32* data = (f32*) PushSize(&MemoryArena, rows*cols*sizeof(f32));
+        f32* data = (f32*) pushSize(&memoryArena, rows*cols*sizeof(f32));
         memset(data, 0, rows*cols);
         return M(data, rows, cols);
     }
 
     static M rand(u32 rows, u32 cols){
-        f32* data = (f32*) PushSize(&MemoryArena, rows*cols*sizeof(f32));
+        f32* data = (f32*) pushSize(&memoryArena, rows*cols*sizeof(f32));
         M o(data, rows,cols);
         for(u32 i=0;i<rows*cols;++i){
             o.data[i] = ((random(0,10000) - 5000.0f) / 10000.0f);
@@ -94,12 +88,18 @@ struct M{
     }
   
     void print(){
-        std::cout << "SHAPE: (" << rows <<"," << stride << ")" << std::endl;
+        Serial.print("SHAPE: (");
+        Serial.print(rows);
+        Serial.print(",");
+        Serial.print(stride);
+
+        Serial.println(")");
         for(u32 i=0;i<size;++i){
             for(u32 j=0;j<stride;++j){
-                std::cout << data[i*stride+j] << " ";
+                Serial.print(data[i*stride+j]);
+                Serial.print(" ");
             }
-            std::cout << "\n";
+            Serial.println();
         }
     }
     
@@ -109,10 +109,6 @@ struct M{
             stride = size;
             size = aux;
         }
-    }
-    
-    f32& operator[](subscript idx){
-        return data[idx.row * stride + idx.col];
     }
 
     f32& operator[](u32 idx){
@@ -154,23 +150,23 @@ struct M{
     void add(M b){
         assert(size == b.size && stride==b.stride);
         for(u32 i=0;i<b.size*b.stride;++i){
-            this->data[i]+=b.data[i];
+            data[i]+=b.data[i];
         }
     }
 
     void sub(M b){
         assert(size == b.size && stride==b.stride);
         for(u32 i=0;i<b.size*b.stride;++i){
-            this->data[i]-=b.data[i];
+            data[i]-=b.data[i];
         }
     }
 
     float sum(){
-        f32 s = 0.0f;
+        f32 result = 0.0f;
         for(u32 i=0;i<size*stride;++i){
-            s += data[i];
+            result += data[i];
         }
-        return s;
+        return result;
     }
 
     u32 argmax(){
@@ -180,8 +176,17 @@ struct M{
                 imax = i;
             }
         }
-
         return imax;
+    }
+
+    u32 argmin(){
+        u32 imin = 0;
+        for(u32 i=0;i<rows*cols;++i){
+            if(data[i] < data[imin]){
+                imin = i;
+            }
+        }
+        return imin;
     }
 
     M square(){
@@ -192,7 +197,7 @@ struct M{
         return out;
     }
 
-    static M MatMul(M A, M B){
+    static M matMul(M A, M B){
         assert(A.stride == B.size);
         M Out = M::zeros(A.size, B.stride);
         for (u32 i = 0; i < A.size; i++) {
@@ -206,7 +211,7 @@ struct M{
         return Out;
     }
 
-    static void MatMul_(M A, M B, M& Out){
+    static void matMul_(M A, M B, M& Out){
         for (u32 i = 0; i < A.size; i++) {
             for (u32 j = 0; j < B.stride; j++) {
                 Out.data[i* B.stride + j] = 0;
@@ -222,23 +227,21 @@ struct Layer{
     M w;
     M b;
 
-    static Layer* Create(u32 input, u32 output){
-        Layer* l = (Layer*)PushSize(&MemoryArena, sizeof(Layer));
+    static Layer* create(u32 input, u32 output){
+        Layer* l = (Layer*)pushSize(&memoryArena, sizeof(Layer));
         l->w = M::rand(input, output);
         l->b = M::zeros(1, output);
         return l;
     }
 
-    Layer(u32 input, u32 output): w(M::rand(input, output)), b(M::zeros(1, output)){}
+    //Layer(u32 input, u32 output): w(M::rand(input, output)), b(M::zeros(1, output)){}
 
     M forward(M x){
         assert(x.cols == w.rows);
         M Out = M::zeros(b.rows, b.cols);
-        for(u32 i=0;i<w.cols;++i)
-        {
+        for(u32 i=0;i<w.cols;++i) {
             f32 accum = 0;
-            for(u32 j=0;j<x.cols;++j)
-            {
+            for(u32 j=0;j<x.cols;++j) {
                 accum += x.data[j] * w.data[j*w.cols + i];
             }
             Out.data[i] = accum + b.data[i];
@@ -250,17 +253,15 @@ struct Layer{
         M out = M::zeros(1,w.rows);
         for(u32 k=0;k<w.rows;++k) {
             f32 accum = 0;
-            for (u32 l=0;l<w.cols;++l)
-            {
+            for (u32 l=0;l<w.cols;++l) {
                 accum += grad.data[l] * w.data[l*w.rows+k];
-
             }
             out.data[k] = accum;
         }
         return out;
     }
 
-    void UpdateWeights(M grads, M a, f32 lr){
+    void updateWeights(M grads, M a, f32 lr){
         for (u32 i=0;i<w.rows;++i){
             for (u32 j=0;j<w.cols;++j){
                 w.data[i * w.cols + j] -= lr * grads.data[j] * a.data[i];
@@ -271,46 +272,50 @@ struct Layer{
 };
 
 
-f32 CrossEntropy(M y, M y_hat) {
+f32 crossEntropy(M y, M y_hat) {
   f32 loss = 0;
   for (u32 i = 0; i < y.cols; i++) {
+    // adding epsilon because log of 0 returns NaN
     loss += y[i] * log(y_hat[i] + 1e-9);
   }
   return -loss;
 }
 
-M CrossEntropyPrime(M y, M y_hat){
+M crossEntropyPrime(M y, M y_hat){
     M out = M::zeros(y.rows, y.cols);
     for (u32 i = 0; i < y.cols; i++) {
+        // adding epsilon(1e-15) preventing division by zero
         out.data[i] = -y[i] / (y_hat[i] + 1e-15);
     }
     return out;
-    // return -(y / y_hat);
 }
 
-M Loss(M y, M y_hat){
+M msePrime(M y, M y_hat){
     return y_hat - y;
 }
 
-f32 Mse(M y, M y_hat)
+f32 mse(M y, M y_hat)
 {
     return (y-y_hat).square().sum();
 }
 
-M Softmax(M X){
-    f32 sum = 0.0f;
+M softmax(M X){
     f32 max = X.data[X.argmax()];
     M out = M::zeros(X.rows, X.cols);
+    
+    f32 sum = 0.0f;
+    // subtracting max, preventing +inf error
     for(u32 i=0;i<X.cols;++i){
         sum += exp(X.data[i] - max);
     }
+
     for(u32 i=0;i<X.cols;++i){
         out.data[i] = exp(X.data[i] - max) / sum;
     }
     return out;
 }
 
-M SoftmaxPrime(M X){
+M softmaxPrime(M X){
     M Out = M::zeros(X.cols, X.cols);
     for(u32 i=0;i<X.cols;++i){
         for(u32 j=0;j<X.cols;++j){
@@ -324,32 +329,24 @@ M SoftmaxPrime(M X){
     return Out;
 }
 
-f32 Sigmoid_(f32 x){
-    return 1.0f / (1.0f + exp(-x));
-}
-
-M Sigmoid(M X){
+M sigmoid(M X){
     u32 Cols = X.cols;
     u32 Rows = X.rows;
     for(u32 i=0;i<Rows * Cols;++i){
-        X.data[i] = Sigmoid_(X.data[i]);
+        X.data[i] = 1.0f / (1.0f + exp(-X.data[i]));
     }
     return X;
 }
 
-f32 D_Sigmoid(f32 X){
-    return X * (1.0f - X);
-}
-
-M SigmoidPrime(M X){
+M sigmoidPrime(M X){
     M Out = M::zeros(X.rows, X.cols);
     for(u32 i=0;i<X.rows * X.cols;++i){
-        Out.data[i] = D_Sigmoid(X.data[i]);
+        Out.data[i] = X.data[i] * (1.0f - X.data[i]);
     }
     return Out;
 }
 
-M Relu(M X){
+M relu(M X){
     M Out = M::zeros(X.rows, X.cols);
     for(u32 i=0;i<X.rows * X.cols;++i){
         Out.data[i] = X.data[i] > 0.0f ? X.data[i] : 0.0f;
@@ -357,7 +354,7 @@ M Relu(M X){
     return Out;
 }
 
-M ReluPrime(M X){
+M reluPrime(M X){
     M Out = M::zeros(X.rows, X.cols);
     for(u32 i=0;i<X.rows * X.cols;++i){
         Out.data[i] = X.data[i] > 0.0f ? 1.0f : 0.0f;

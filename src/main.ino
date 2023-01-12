@@ -1,20 +1,20 @@
 #include "nn.h"
 
-static Layer* l1;  
-static Layer* l2; 
-static Layer* l3; 
+static Layer* inputLayer;  
+static Layer* hiddenLayer; 
+static Layer* outputLayer; 
 static u32 memoryUsed = 0;
 
 void setup(){
-    InitMemory(1024 * 32);
+    initMemory(1024 * 32);
 
-    l1 = Layer::Create(1,8);
-    l2 = Layer::Create(8,8);
-    l3 = Layer::Create(8,1);
+    inputLayer = Layer::create(1,64);
+    hiddenLayer = Layer::create(64,64);
+    outputLayer = Layer::create(64,1);
 
-    memoryUsed = MemoryArena.Used;
-    Serial.println("Memory used for NN initialization: ");
-    Serial.print(MemoryArena.Used);
+    memoryUsed = memoryArena.used;
+    //Serial.println("Memory used for initialization: ");
+    //Serial.print(memoryArena.used);
 
     pinMode(LEDR, OUTPUT);
     pinMode(LEDG, OUTPUT);
@@ -24,7 +24,6 @@ void setup(){
     digitalWrite(LEDG, HIGH);
     digitalWrite(LEDB, HIGH);
 
-    Serial.write("123");
 }
 
 void loop(){
@@ -65,8 +64,8 @@ void loop(){
             break;
         }
     }
-
-    MemoryArena.Used = memoryUsed;
+    // reset memory arena
+    memoryArena.used = memoryUsed;
 }
 
 float readFloat() {
@@ -87,36 +86,46 @@ void sendFloat (float arg)
     Serial.write (data, sizeof (arg));
 }
 
+void sendInt (int arg)
+{
+    // get access to the float as a byte-array:
+    byte * data = (byte *) &arg; 
+
+    // write the data to the serial
+    Serial.write (data, sizeof (arg));
+}
+
 static f32 lr = 0.1f;
 f32 train(f32 x, f32 y){
+    int start = micros();
     M input = M(&x, 1,1);
     M target = M(&y, 1,1);
 
-    M a = Sigmoid(l1->forward(input));
-    M h = Sigmoid(l2->forward(a));
-    M o = l3->forward(h);
+    M a = sigmoid(inputLayer->forward(input));
+    M h = sigmoid(hiddenLayer->forward(a));
+    M o = outputLayer->forward(h);
 
-    M e3 = Loss(target, o);
+    M e3 = msePrime(target, o);
     M d3 = e3;
 
-    M e2 = l3->backward(d3);
-    M d2 = e2 * SigmoidPrime(h);
+    M e2 = outputLayer->backward(d3);
+    M d2 = e2 * sigmoidPrime(h);
 
-    M e1 = l2->backward(d2);
-    M d1 = e1 * SigmoidPrime(a);
+    M e1 = hiddenLayer->backward(d2);
+    M d1 = e1 * sigmoidPrime(a);
 
-    l3->UpdateWeights(d3, h, lr);
-    l2->UpdateWeights(d2, a, lr);
-    l1->UpdateWeights(d1, input, lr);
-
-    return Mse(target, o);
+    outputLayer->updateWeights(d3, h, lr);
+    hiddenLayer->updateWeights(d2, a, lr);
+    inputLayer->updateWeights(d1, input, lr);
+    sendInt(micros() - start);
+    return mse(target, o);
 }
 
 f32 predict(f32 x){
     M input = M(&x, 1,1);
-    M a = Sigmoid(l1->forward(input));
-    M h = Sigmoid(l2->forward(a));
-    M o = l3->forward(h);
+    M a = sigmoid(inputLayer->forward(input));
+    M h = sigmoid(hiddenLayer->forward(a));
+    M o = outputLayer->forward(h);
 
     return o.data[0];
 }
