@@ -12,7 +12,7 @@ onehot_encoder = OneHotEncoder(sparse=False)
 y_train_one_hot=onehot_encoder.fit_transform(y_train.reshape(-1,1))
 y_test_one_hot=onehot_encoder.fit_transform(y_test.reshape(-1,1))
 
-HOST = '192.168.1.135'  # The server's hostname or IP address
+HOST = '192.168.1.131'  # The server's hostname or IP address
 PORT = 65432        # The port used by the server
 
 def send_data(data):
@@ -30,10 +30,10 @@ def send_data(data):
         s.sendall(length_descriptor + payload)
 
 np.random.seed(42)
-#X = np.concatenate([X_train/255, X_test/255])
-#y = np.concatenate([y_train_one_hot, y_test_one_hot])
-X = np.random.uniform(0.0,1.0,(600,))
-y = np.sin(2*X * math.pi)
+X = np.concatenate([X_train/255, X_test/255])
+y = np.concatenate([y_train_one_hot, y_test_one_hot])
+#X = np.random.uniform(0.0,1.0,(600,))
+#y = np.sin(2*X * math.pi)
 
 send_data(X)
 send_data(y)

@@ -271,6 +271,43 @@ struct Layer{
     }
 };
 
+// #if defined ( __GNUC__ )
+// #pragma GCC diagnostic push
+// #pragma GCC diagnostic ignored "-Wstrict-aliasing"
+// #endif
+//     /**
+//      * > 50% faster then the math.h log() function
+//      * in return for a small loss in accuracy (0.00001 average diff with log())
+//      * From: https://stackoverflow.com/questions/39821367/very-fast-approximate-logarithm-natural-log-function-in-c/39822314#39822314
+//      * Licensed under the CC BY-SA 3.0
+//      * @param a Input number
+//      * @returns Natural log value of a
+//      */
+//     __attribute__((always_inline)) static inline float log(float a)
+//     {
+//         float m, r, s, t, i, f;
+//         int32_t e, g;
+
+//         g = (int32_t) * ((int32_t *)&a);
+//         e = (g - 0x3f2aaaab) & 0xff800000;
+//         g = g - e;
+//         m = (float) * ((float *)&g);
+//         i = (float)e * 1.19209290e-7f; // 0x1.0p-23
+//         /* m in [2/3, 4/3] */
+//         f = m - 1.0f;
+//         s = f * f;
+//         /* Compute log1p(f) for f in [-1/3, 1/3] */
+//         r = fmaf(0.230836749f, f, -0.279208571f); // 0x1.d8c0f0p-3, -0x1.1de8dap-2
+//         t = fmaf(0.331826031f, f, -0.498910338f); // 0x1.53ca34p-2, -0x1.fee25ap-2
+//         r = fmaf(r, s, t);
+//         r = fmaf(r, s, f);
+//         r = fmaf(i, 0.693147182f, r); // 0x1.62e430p-1 // log(2)
+
+//         return r;
+//     }
+// #if defined ( __GNUC__ )
+// #pragma GCC diagnostic pop
+// #endif
 
 f32 crossEntropy(M y, M y_hat) {
   f32 loss = 0;
