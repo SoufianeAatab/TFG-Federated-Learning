@@ -7,7 +7,7 @@ Final degree project for the Bachelor's Degree in Computer Science of the [Unive
 1. Install VsCode and PlatformIO extension
 2. Open the project with PlatformIO and flash the firmware to all the boards.
     1. Connect arduino to your laptop
-    2. In platformIO home > project task > click on Build, if everthing compiles successfully then click upload to flash the firmware
+    2. In platformIO home > project task > click on Build. if everthing compiles successfully then click upload to flash the firmware
 
 
 ## Authors
