@@ -9,8 +9,8 @@ f32 CrossEntropy(M y, M y_hat)
     // Loop through each output in the target y and predicted y_hat.
     for (u32 i = 0; i < y.cols; i++)
     {
-    // The 1e-9 is added to avoid log(0) which would result in a NaN (Not a Number) value.
-    loss += y[i] * log(y_hat[i] + 1e-9);
+        // The 1e-9 is added to avoid log(0) which would result in a NaN (Not a Number) value.
+        loss += y[i] * log(y_hat[i] + 1e-9);
     }
     // Return the negative of the loss.
     return -loss;
@@ -103,6 +103,25 @@ M SigmoidPrime(M X)
     return Out;
 }
 
+M3 Sigmoid(M3 X)
+{
+    for (u32 i = 0; i < X.d1 * X.d2 * X.d3; ++i)
+    {
+        X.data[i] = 1.0f / (1.0f + exp(-X.data[i]));
+    }
+    return X;
+}
+
+M3 SigmoidPrime(M3 X)
+{
+    M3 Out = M3::zeros(X.d1, X.d2, X.d3);
+    for (u32 i = 0; i < X.d1 * X.d2 * X.d3; ++i)
+    {
+        Out.data[i] = X.data[i] * (1.0f - X.data[i]);
+    }
+    return Out;
+}
+
 M Relu(M X)
 {
     M Out = M::zeros(X.rows, X.cols);
@@ -123,6 +142,26 @@ M ReluPrime(M X)
     return Out;
 }
 
+M3 Relu(M3 X)
+{
+    M3 Out = M3::zeros(X.d1, X.d2, X.d3);
+    for (u32 i = 0; i < X.d1 * X.d2 * X.d3; ++i)
+    {
+        Out.data[i] = X.data[i] > 0.0f ? X.data[i] : 0.0f;
+    }
+    return Out;
+}
+
+M3 ReluPrime(M3 X)
+{
+    M3 Out = M3::zeros(X.d1, X.d2, X.d3);
+    for (u32 i = 0; i < X.d1 * X.d2 * X.d3; ++i)
+    {
+        Out.data[i] = X.data[i] > 0.0f ? 1.0 : 0.0f;
+    }
+    return Out;
+}
+
 M Tanh(M X)
 {
     M Out = M::zeros(X.rows, X.cols);
@@ -137,6 +176,26 @@ M TanhPrime(M X)
 {
     M Out = M::zeros(X.rows, X.cols);
     for (u32 i = 0; i < X.rows * X.cols; ++i)
+    {
+        Out.data[i] = (1 - X.data[i] * X.data[i]);
+    }
+    return Out;
+}
+
+M3 Tanh(M3 X)
+{
+    M3 Out = M3::zeros(X.d1, X.d2, X.d3);
+    for (u32 i = 0; i <  X.d1*X.d2*X.d3; ++i)
+    {
+        Out.data[i] = tanh(X.data[i]);
+    }
+    return Out;
+}
+
+M3 TanhPrime(M3 X)
+{
+    M3 Out = M3::zeros(X.d1, X.d2, X.d3);
+    for (u32 i = 0; i < X.d1*X.d2*X.d3; ++i)
     {
         Out.data[i] = (1 - X.data[i] * X.data[i]);
     }

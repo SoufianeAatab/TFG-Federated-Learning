@@ -4,5 +4,6 @@ id_rsa_git.pub
 nn
 a.out
 model.h
+creditcard.csv
 *.cpp.o
 .pio/
