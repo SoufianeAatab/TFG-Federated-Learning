@@ -94,5 +94,33 @@ struct M3{
         return o;
     }
 
+
+    void store(const char* filename){
+        std::ofstream outfile(filename);
+
+        outfile << this->d1;
+        outfile << "\t";
+        outfile << this->d2;
+        outfile << "\t";
+        outfile << this->d3;
+        outfile << "\t";
+        for(u32 i=0;i<this->d1*this->d2*this->d3;++i){
+            outfile << this->data[i];
+            outfile << " ";
+        }
+        outfile.close();
+    }
+
+    void load(const char* filename){
+        std::ifstream infile(filename);
+        infile >> this->d1;
+        infile >> this->d2;
+        infile >> this->d3;
+        for(u32 i=0;i<this->d1 * this->d2 * this->d3;++i){
+            infile >> this->data[i];
+        }
+        infile.close();
+    }
+
 };
 #endif

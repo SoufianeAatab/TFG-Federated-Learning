@@ -256,5 +256,29 @@ struct M
             }
         }
     }
+
+    void store(const char* filename){
+        std::ofstream outfile(filename);
+
+        outfile << this->rows;
+        outfile << "\t";
+        outfile << this->cols;
+        outfile << "\t";
+        for(u32 i=0;i<this->rows*this->cols;++i){
+            outfile << this->data[i];
+            outfile << " ";
+        }
+        outfile.close();
+    }
+
+    void load(const char* filename){
+        std::ifstream infile(filename);
+        infile >> this->rows;
+        infile >> this->cols;
+        for(u32 i=0;i<this->rows * this->cols;++i){
+            infile >> this->data[i];
+        }
+        infile.close();
+    }
 };
 #endif

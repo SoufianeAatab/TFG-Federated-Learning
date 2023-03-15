@@ -3,6 +3,7 @@
 #include <random>
 #include <stdint.h>
 #include <cmath>
+#include <fstream>
 
 typedef uint8_t u8;
 typedef uint16_t u16;
@@ -60,6 +61,13 @@ void setRandomUniform(double low, double high)
     distribution = std::uniform_real_distribution<double>(low, high);
 }
 
+// Set Glorot uniform distribution for weights random intialization
+void setGlorotUniform(u32 in, u32 out)
+{
+    double scale = sqrt(6.0f / ((f32)in + (f32)out));
+    distribution = std::uniform_real_distribution<double>(-scale, scale);
+}
+
 struct Layer
 {
     // Weight and bias matrices
@@ -97,13 +105,6 @@ struct Layer
         l->vdw = M::zeros(input_size, output_size);
         l->vdb = M::zeros(1, output_size);
         return l;
-    }
-
-    // Set Glorot uniform distribution for weights random intialization
-    void setGlorotUniform(u32 in, u32 out)
-    {
-        double scale = sqrt(6.0f / ((f32)in + (f32)out));
-        distribution = std::uniform_real_distribution<double>(-scale, scale);
     }
 
     // Forward propagation function
@@ -167,6 +168,21 @@ struct Layer
             }
         }
         return out;
+    }
+
+    void setDelta(M grads, M a)
+    {
+        assert(w.rows == a.cols);
+        for (u32 i = 0; i < w.rows; ++i)
+        {
+            for (u32 j = 0; j < w.cols; ++j)
+            {
+                f32 g = grads.data[j];
+                dw.data[i * w.cols + j] = g * a.data[i];
+            }
+            db.data[i] = grads.data[i];
+        }
+
     }
 
     void UpdateWeights(f32 lr, u32 batchsize = 1)
@@ -694,55 +710,8 @@ void creditcardFraudAutoEncoder()
     free(MemoryArena.Base);
 }
 
-void CNN(u32 m, u32 h, u32 w, f32 lr, f32 epochs, u32 batchsize){
-    Conv2D* cnv1 = Conv2D::Create(h,w,1, 3,3,8); 
-    MaxPooling* pl = MaxPooling::create(cnv1->getOutputSize().h, cnv1->getOutputSize().w, cnv1->getOutputSize().c, 2,2,1);
-    Layer* l0 = Layer::create(pl->getLinearFlattenedSize(), 32);
-    Layer* l1 = Layer::create(32, 10);
-
-    for(u32 epoch=0;epoch < epochs;++epoch){
-        for (u32 i = 0; i < m; i += batchsize)
-        {
-            cnv1->resetGradients();
-            pl->resetGradients();
-            l0->resetGradients();
-            l1->resetGradients();
-
-            for (u32 j = i; j < (i + batchsize) && j < m; ++j)
-            {
-                M3 a = Sigmoid(cnv1->convolve2D(input[i]));
-                M3 b = pl->forward(a);
-                M flatten = b.flatten();
-                M c = Sigmoid(l0->forward(flatten));
-                M d = Softmax(l1->forward(c));
-
-                M d2 = M::MatMul(CrossEntropyPrime(y[i], d), SoftmaxPrime(d));
-                M d1 = l1->backward(d2) * SigmoidPrime(c);
-                M d0 = l0->backward(d1);
-
-                M3 dcnv = M3(d0.data, bb.d1, bb.d2, bb.d3);
-                pl->backward(dcnv);
-                M3 bpl = pl->d * SigmoidPrime(a);
-
-                cnv1->backward_conv(input[i], bpl);
-                l1->dw += l1->getDelta(d2, a);
-                l1->db += d2;
-
-                l0->dw += l0->getDelta(d1, flatten);
-                l0->db += d1;
-
-                cnv1->updateKernels(lr);
-            }
-
-            l0->UpdateWeights(lr, batchsize);
-            l1->UpdateWeights(lr, batchsize);
-        }
-    }
-}
-
-int main()
-{
-    InitMemory(1024*1024*512*2);
+void CNN(){
+     InitMemory(1024*1024*512*2);
 
     #define EPOCHS 1000
     #define M_EXAMPLES 60000
@@ -922,4 +891,110 @@ int main()
     #endif 
     
     std::printf("\nMemory used: %lu kb\n", MemoryArena.Used/1024);
+}
+
+#include <iostream>
+
+int main() {
+    InitMemory(1024*1024 * 5); // Reserve 1MB of continous memory
+
+    Layer* l1 = Layer::create(1,64);
+    Layer* l2 = Layer::create(64,64);
+    Layer* l3 = Layer::create(64,1);
+
+    M x[600] = {};
+    M y[600] = {};
+
+    u32 size = 0;
+    f32* xs = get_data(&size);
+    f32* ys = get_data(&size);
+    for(u32 i=0;i<600;++i){
+        x[i] = M(xs + i,1,1);
+        y[i] = M(ys + i,1,1);
+    }
+    f32 lr = 0.1;
+    u32 m = 600;
+    u32 epochs = 100;
+
+    u32 memoryCheckPoint = MemoryArena.Used;
+    #define TRAINING 0
+    #if TRAINING
+    for(u32 i=0;i<epochs;++i){
+        f32 error = 0.0f;
+        for(u32 j=0;j<m;++j){
+            l1->resetGradients();
+            l2->resetGradients();
+            l3->resetGradients();
+
+            M a = Sigmoid(l1->forward(x[j]));
+            M b = Sigmoid(l2->forward(a));
+            M o = l3->forward(b);
+
+            M e3 = MsePrime(y[j], o);
+            M e2 = l3->backward(e3) * SigmoidPrime(b);
+            M e1 = l2->backward(e2) * SigmoidPrime(a);
+
+            l1->setDelta(e1, x[j]);
+            l2->setDelta(e2, a);
+            l3->setDelta(e3, b);
+
+            // l3->dw = l3->getDelta(e3, b);
+            // l3->db = e3;
+
+            // l2->dw = l2->getDelta(e2, a);
+            // l2->db = e2;
+
+            // l1->dw = l1->getDelta(e1, x[j]);
+            // l1->db = e1;
+
+            l1->UpdateWeights(lr);
+            l2->UpdateWeights(lr);
+            l3->UpdateWeights(lr);
+
+            error += Mse(y[j], o);
+            MemoryArena.Used = memoryCheckPoint;
+        }
+
+        std::printf("Epochs[%d/%d] loss: %f\n", i, epochs, error / 600.0f);
+    }
+
+    l1->w.print();
+    l2->w.print();
+    l3->w.print();
+
+    l1->b.print();
+    l2->b.print();
+    l3->b.print();
+
+    l1->w.store("w1");
+    l1->b.store("b1");
+
+    l2->w.store("w2");
+    l2->b.store("b2");
+
+    l3->w.store("w3");
+    l3->b.store("b3");
+
+    #else
+
+    l1->w.load("w1");
+    l1->b.load("b1");
+
+    l2->w.load("w2");
+    l2->b.load("b2");
+
+    l3->w.load("w3");
+    l3->b.load("b3");
+
+    u32 index = 0;
+    while(std::cin >> index){
+        M a = Sigmoid(l1->forward(x[index]));
+        M b = Sigmoid(l2->forward(a));
+        M o = l3->forward(b);
+        o.print();
+    }
+
+    #endif
+
+
 }
