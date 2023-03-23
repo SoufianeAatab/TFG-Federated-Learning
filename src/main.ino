@@ -1,20 +1,29 @@
+#define ONCOMPUTER 0
 #include "nn.h"
 
-static Layer* inputLayer;  
-static Layer* hiddenLayer; 
-static Layer* outputLayer; 
+static Layer* l1;  
+static Layer* l2; 
+static Layer* l3; 
 static u32 memoryUsed = 0;
+static f32 lr = 0.01f;
+
+struct train_data{
+    M input;
+    M target;
+};
+
+#define INPUT_SIZE 64
+#define OUTPUT_SIZE 10
 
 void setup(){
-    initMemory(1024 * 32);
+    Serial.begin(9600);
+    InitMemory(1024 * 32 * 4);
 
-    inputLayer = Layer::create(1,64);
-    hiddenLayer = Layer::create(64,64);
-    outputLayer = Layer::create(64,1);
+    l1 = Layer::create(INPUT_SIZE,32);
+    l2 = Layer::create(32,32);
+    l3 = Layer::create(32,OUTPUT_SIZE);
 
-    memoryUsed = memoryArena.used;
-    //Serial.println("Memory used for initialization: ");
-    //Serial.print(memoryArena.used);
+    memoryUsed = MemoryArena.Used;
 
     pinMode(LEDR, OUTPUT);
     pinMode(LEDG, OUTPUT);
@@ -24,48 +33,127 @@ void setup(){
     digitalWrite(LEDG, HIGH);
     digitalWrite(LEDB, HIGH);
 
+    // put your setup code here, to run once:
+    randomSeed(0);
+
+    initNetworkModel();
+    digitalWrite(LED_BUILTIN, LOW);    // OFF   
 }
 
-void loop(){
-    if(Serial.available() > 0){
-        int inByte = Serial.read();
-        switch(inByte){
-            case 'r':
-                digitalWrite(LEDR, LOW);
-                digitalWrite(LEDG, HIGH);
-                digitalWrite(LEDB, HIGH);
-                break;
-            case 'g':
-                digitalWrite(LEDR, HIGH);
-                digitalWrite(LEDG, LOW);
-                digitalWrite(LEDB, HIGH);
-                break;
-            case 'b':
-                digitalWrite(LEDR, HIGH);
-                digitalWrite(LEDG, HIGH);
-                digitalWrite(LEDB, LOW);
-                break;
-            case 't':
-            {
-                f32 x = readFloat();
-                f32 y = readFloat();    
-                f32 loss = train(x, y);
-                sendFloat(loss);
-                Serial.flush();
+void read_weights(Layer* l) {
+    //Serial.println("Receiving weights..");
+    float* weights = l->w.data;
 
-            }break;
-            case 'p':
-            {
-                f32 x = readFloat();
-                f32 y = predict(x);
-                sendFloat(y);
-                Serial.flush();
-            }
-            break;
-        }
+    for (uint16_t i = 0; i < l->w.rows * l->w.cols; ++i) {
+        Serial.write('n');
+        while (Serial.available() < 4);
+
+        char bytes[4];
+        Serial.readBytes(bytes, 4);
+        weights[i] = *reinterpret_cast<float*>(bytes);
     }
-    // reset memory arena
-    memoryArena.used = memoryUsed;
+
+    // for (uint16_t i = 0; i < l->w.rows * l->w.cols; ++i) {
+    //     Serial.print(l->w.data[i]);
+    //     Serial.print(" ");
+    // }
+    // Serial.print(l->w.std());
+}
+
+void read_bias(Layer* l) {
+    //Serial.println("Receiving bias..");
+    float* bias = l->b.data;
+    for (uint16_t i = 0; i < l->b.rows * l->b.cols; ++i) {
+        Serial.write('n');
+        while (Serial.available() < 4);
+
+        char bytes[4];
+        Serial.readBytes(bytes, 4);
+        bias[i] = *reinterpret_cast<float*>(bytes);
+    }
+
+    // for (uint16_t i = 0; i < l->b.rows * l->b.cols; ++i) {
+    //     Serial.print(l->b.data[i]);
+    //     Serial.print(" ");
+    // }
+    // Serial.print(l->b.std());
+}
+
+void sendLayerMetaData(Layer* l){
+    sendInt(l->w.rows);
+    sendInt(l->w.cols);
+}
+
+void initNetworkModel(){
+    Serial.println("Start receiving model");
+    char signal;
+    do {
+        signal = Serial.read();
+        Serial.println("Waiting for new model...");
+    } while(signal != 's'); // s -> START
+
+    Serial.println("start");
+    Serial.write("i");
+    // How many layers?
+    sendInt(3);
+    sendLayerMetaData(l1);
+    sendLayerMetaData(l2);
+    sendLayerMetaData(l3);
+
+    // TODO : Change to read_weights(l1): this will read bias and weights within the same function.
+    read_bias(l1);
+    read_weights(l1);
+
+    read_bias(l2);
+    read_weights(l2);
+
+    read_bias(l3);
+    read_weights(l3);
+}
+
+train_data receive_sample(){
+    train_data data = {};
+    data.input = M::zeros(1,INPUT_SIZE);
+    data.target = M::zeros(1, OUTPUT_SIZE);
+
+    f32* input = data.input.data;
+    f32* target = data.target.data;
+
+    for(u16 i=0;i<INPUT_SIZE;++i){
+        Serial.write('n');
+        while (Serial.available() < 4);
+
+        char bytes[4];
+        Serial.readBytes(bytes, 4);
+        input[i] = *reinterpret_cast<float*>(bytes);
+    }
+    
+    for(u16 i=0;i<OUTPUT_SIZE;++i){
+        Serial.write('n');
+        while (Serial.available() < 4);
+
+        char bytes[4];
+        Serial.readBytes(bytes, 4);
+        target[i] = *reinterpret_cast<float*>(bytes);
+    }
+
+    return data;
+}
+
+M receive_sample_inference(){
+    M data = M::zeros(1,INPUT_SIZE);
+    f32* input = data.data;
+
+    for(u16 i=0;i<INPUT_SIZE;++i){
+        Serial.write('n');
+        while (Serial.available() < 4);
+
+        char bytes[4];
+        Serial.readBytes(bytes, 4);
+        input[i] = *reinterpret_cast<float*>(bytes);
+    }
+
+    return data;
 }
 
 float readFloat() {
@@ -75,6 +163,14 @@ float readFloat() {
         res[n] = Serial.read();
     }
     return *(float *)&res;
+}
+
+void sendM(M arg)
+{
+    for(u32 i=0;i<arg.cols * arg.rows;++i){
+        Serial.write('n');
+        sendFloat(arg.data[i]);
+    }
 }
 
 void sendFloat (float arg)
@@ -95,37 +191,58 @@ void sendInt (int arg)
     Serial.write (data, sizeof (arg));
 }
 
-static f32 lr = 0.1f;
-f32 train(f32 x, f32 y){
-    int start = micros();
-    M input = M(&x, 1,1);
-    M target = M(&y, 1,1);
+f32 train(M input, M target){
+    // l1->resetGradients();
+    // l2->resetGradients();
+    // l3->resetGradients();
 
-    M a = sigmoid(inputLayer->forward(input));
-    M h = sigmoid(hiddenLayer->forward(a));
-    M o = outputLayer->forward(h);
+    M a = Sigmoid(l1->forward(input));
+    M b = Sigmoid(l2->forward(a));
+    M o = Softmax(l3->forward(b));
 
-    M e3 = msePrime(target, o);
-    M d3 = e3;
+    M e3 = M::MatMul(CrossEntropyPrime(target, o), SoftmaxPrime(o));
+    M e2 = l3->backward(e3) * SigmoidPrime(b);
+    M e1 = l2->backward(e2) * SigmoidPrime(a);
 
-    M e2 = outputLayer->backward(d3);
-    M d2 = e2 * sigmoidPrime(h);
+    l3->dw = l3->getDelta(e3, b);
+    l2->dw = l2->getDelta(e2, a);
+    l1->dw = l1->getDelta(e1, input);
 
-    M e1 = hiddenLayer->backward(d2);
-    M d1 = e1 * sigmoidPrime(a);
+    l3->db = e3;
+    l2->db = e2;
+    l1->db = e1;
 
-    outputLayer->updateWeights(d3, h, lr);
-    hiddenLayer->updateWeights(d2, a, lr);
-    inputLayer->updateWeights(d1, input, lr);
-    sendInt(micros() - start);
-    return mse(target, o);
+    l3->UpdateWeights(lr);
+    l2->UpdateWeights(lr);
+    l1->UpdateWeights(lr);
+
+    // l1->UpdateWeights(e1, input, lr);
+    // l2->UpdateWeights(e2, a, lr);
+    // l3->UpdateWeights(e3, b, lr);
+
+    return CrossEntropy(target, o);
 }
 
-f32 predict(f32 x){
-    M input = M(&x, 1,1);
-    M a = sigmoid(inputLayer->forward(input));
-    M h = sigmoid(hiddenLayer->forward(a));
-    M o = outputLayer->forward(h);
+M predict(M input){
+    M a = Sigmoid(l1->forward(input));
+    M b = Sigmoid(l2->forward(a));
+    M o = Softmax(l3->forward(b));
 
-    return o.data[0];
+    return o;
+}
+
+void loop(){
+    if(Serial.available() > 0){
+        char inByte = Serial.read();
+        if(inByte == 't'){
+            train_data sample = receive_sample();
+            f32 error = train(sample.input, sample.target);
+            sendFloat(error);
+        } else if(inByte == 'p'){
+            M input = receive_sample_inference();
+            M output = predict(input);
+            sendM(output);
+        }
+    }
+    MemoryArena.Used = memoryUsed;
 }

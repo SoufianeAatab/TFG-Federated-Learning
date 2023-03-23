@@ -42,12 +42,15 @@ momentum = 0.9
 learningRate= 0.6
 pauseListen = False # So there are no threads reading the serial input at the same time
 
+
+# filters by name and creates a list of files
 montserrat_files = [file for file in os.listdir("datasets/keywords") if file.startswith("montserrat")]
 pedraforca_files = [file for file in os.listdir("datasets/keywords") if file.startswith("pedraforca")]
 vermell_files = [file for file in os.listdir("datasets/keywords") if file.startswith("vermell")]
 blau_files = [file for file in os.listdir("datasets/keywords") if file.startswith("blau")]
 verd_files = [file for file in os.listdir("datasets/keywords") if file.startswith("verd")]
 
+# test 
 test_montserrat_files = [file for file in os.listdir("datasets/test-keywords/") if file.startswith("montserrat")]
 test_pedraforca_files = [file for file in os.listdir("datasets/test-keywords") if file.startswith("pedraforca")]
 test_blau_files = [file for file in os.listdir("datasets/test-keywords") if file.startswith("blau")]

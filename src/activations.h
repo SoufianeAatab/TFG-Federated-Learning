@@ -30,6 +30,21 @@ M CrossEntropyPrime(M y, M y_hat)
     // return -(y / y_hat);
 }
 
+M BinaryCrossEntropyPrime(M y, M y_hat)
+{
+    // Initialize an empty matrix with the same shape as the inputs, y and y_hat.
+    M out = M::zeros(y.rows, y.cols);
+    
+    for (u32 i = 0; i < y.cols; i++)
+    {
+        // Add a small value to avoid division by zero.
+        const double eps = 1e-15;
+        out.data[i] = (y_hat[i] - y[i]) / (y_hat[i] * (1 - y_hat[i]) + eps);
+    }
+    
+    return out;
+}
+
 // Computes the derivative of the mean squared error (MSE) loss with respect to 'y_hat'
 inline M MsePrime(M y, M y_hat)
 {

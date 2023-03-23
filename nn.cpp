@@ -53,7 +53,7 @@ void printMemoryInfo()
     std::printf("\nMemory used %lu\nMemory available %lu\n\n", MemoryArena.Used, MemoryArena.Size - MemoryArena.Used);
 }
 
-#include "M4.cpp"
+#include "M4.h"
 #include "src/activations.h"
 
 void setRandomUniform(double low, double high)
@@ -67,149 +67,7 @@ void setGlorotUniform(u32 in, u32 out)
     double scale = sqrt(6.0f / ((f32)in + (f32)out));
     distribution = std::uniform_real_distribution<double>(-scale, scale);
 }
-
-struct Layer
-{
-    // Weight and bias matrices
-    M w;
-    M b;
-
-    // Gradient and biases weights matrices
-    M dw;
-    M db;
-
-    M vdw;
-    M vdb;
-
-    // Factory function to create a new layer object
-    static Layer *create(u32 input_size, u32 output_size)
-    {
-        // Allocate memory for the layer on the memory arena
-        Layer *l = (Layer *)PushSize(&MemoryArena, sizeof(Layer));
-
-#if GLOROT_UNIFORM
-        // Initialize the weight matrix with Glorot uniform distribution
-        setGlorotUniform(input_size, output_size);
-#else
-        setRandomUniform(-0.5, 0.5);
-#endif
-        // Initialize the weight and bias matrices with random values
-        l->w = M::rand(input_size, output_size);
-        l->b = M::zeros(1, output_size);
-
-        // Initialize the gradient matrices to zero
-        l->dw = M::zeros(input_size, output_size);
-        l->db = M::zeros(1, output_size);
-
-        // Initialize the momentum matrices to zero
-        l->vdw = M::zeros(input_size, output_size);
-        l->vdb = M::zeros(1, output_size);
-        return l;
-    }
-
-    // Forward propagation function
-    M forward(M x)
-    {
-        // Check that the input matrix has the correct number of columns, this saves us from stupid bugs.
-        assert(x.cols == w.rows);
-        M Out = M::zeros(x.rows, w.cols);
-        for (u32 i = 0; i < w.cols; ++i)
-        {
-            f32 accum = 0;
-            for (u32 j = 0; j < x.cols; ++j)
-            {
-                accum += x.data[j] * w.data[j * w.cols + i];
-                // maybe slightly improve the performance ?
-                // accum += x.data[j] * w.data[idx];
-                // idx += w.cols;
-            }
-            Out.data[i] = accum + b.data[i];
-        }
-        return Out;
-    }
-
-    // Backward propagation function
-    M backward(M grad)
-    {
-        // Check that the gradient matrix has the correct number of columns
-        assert(grad.cols == w.cols);
-        M out = M::zeros(1, w.rows);
-        for (u32 k = 0; k < w.rows; ++k)
-        {
-            //f32 accum = 0;
-            for (u32 l = 0; l < grad.cols; ++l)
-            {
-                //accum += grad.data[l] * w.data[k * w.cols + l];
-                out.data[k] += grad.data[l] * w.data[k * w.cols + l];
-            }
-            //out.data[k] = accum;
-        }
-        return out;
-    }
-
-    // Function to reset the gradient matrices to zero
-    void resetGradients()
-    {
-        this->dw = M::zeros(this->dw.rows, this->dw.cols);
-        this->db = M::zeros(1, this->db.cols);
-    }
-
-    // Function to calculate the weights matrix gradients, using the input gradient and the activation function of the current layer
-    M getDelta(M grads, M a)
-    {
-        assert(w.rows == a.cols);
-        M out = M::zeros(w.rows, w.cols);
-        for (u32 i = 0; i < w.rows; ++i)
-        {
-            for (u32 j = 0; j < w.cols; ++j)
-            {
-                f32 g = grads.data[j];
-                out.data[i * w.cols + j] = g * a.data[i];
-            }
-        }
-        return out;
-    }
-
-    void setDelta(M grads, M a)
-    {
-        assert(w.rows == a.cols);
-        for (u32 i = 0; i < w.rows; ++i)
-        {
-            for (u32 j = 0; j < w.cols; ++j)
-            {
-                f32 g = grads.data[j];
-                dw.data[i * w.cols + j] = g * a.data[i];
-            }
-            db.data[i] = grads.data[i];
-        }
-
-    }
-
-    void UpdateWeights(f32 lr, u32 batchsize = 1)
-    {
-        // scale the learning rate by the batch size. By default, the batch size is set to 1.
-        lr = lr * (1.0f / (f32)batchsize);
-
-        // MOMENTUM
-        vdw = vdw * 0.9f + dw * (1.0f-0.9f);  
-        vdb = vdb * 0.9f + db * (1.0f-0.9f);  
-
-        for (u32 i = 0; i < w.rows; ++i)
-        {
-            for (u32 j = 0; j < w.cols; ++j)
-            {
-                // Update weights
-                //w.data[i * w.cols + j] -= lr * this->dw[i * this->dw.cols + j];
-                w.data[i * w.cols + j] -= lr * this->vdw[i * this->vdw.cols + j];
-            }
-            // Update bias
-            //b.data[i] -= lr * this->db[i];
-            b.data[i] -= lr * this->vdb[i];
-        }
-
-    }
-};
-
+#include "src/layer.h"
 struct Size3D{
     i32 h;
     i32 w;
@@ -711,7 +569,7 @@ void creditcardFraudAutoEncoder()
 }
 
 void CNN(){
-     InitMemory(1024*1024*512*2);
+    InitMemory(1024*1024*512*2);
 
     #define EPOCHS 1000
     #define M_EXAMPLES 60000
@@ -747,15 +605,19 @@ void CNN(){
     u32 epochs = EPOCHS;
     
     #if CONVNET
-    Conv2D* cnv1 = Conv2D::Create(SIZE,SIZE,1, 3,3,8); 
+    Conv2D* cnv1 = Conv2D::Create(SIZE,SIZE,1, 3,3, 8); 
     #if POOLING
+    
     MaxPooling* pl = MaxPooling::create(cnv1->getOutputSize().h, cnv1->getOutputSize().w, cnv1->getOutputSize().c, 2,2,1);
     Layer* l0 = Layer::create(pl->getLinearFlattenedSize(), 100);
     std::printf("OUTPUT MAXPOOLING %d, WITHOUT MAXPOOLING %d \n",pl->getLinearFlattenedSize(),cnv1->getLinearFlattenedSize());
     #else
     Layer* l0 = Layer::create(cnv1->getLinearFlattenedSize(), 100);
     #endif
+
+
     Layer* l1 = Layer::create(100, 10);
+
     std::printf("MEMORY USED %zu\n", MemoryArena.Used);
     u32 usedMem = MemoryArena.Used;
 
@@ -779,6 +641,7 @@ void CNN(){
             #endif
             M a = Sigmoid(l0->forward(flatten));
             M c = Softmax(l1->forward(a));
+
             M d2 = M::MatMul(CrossEntropyPrime(y[i], c), SoftmaxPrime(c));
             M d1 = l1->backward(d2) * SigmoidPrime(a);
             M d0 = l0->backward(d1);
@@ -896,11 +759,15 @@ void CNN(){
 #include <iostream>
 
 int main() {
+    creditcardFraudAutoEncoder();
+
+    return 0;
+
     InitMemory(1024*1024 * 5); // Reserve 1MB of continous memory
 
-    Layer* l1 = Layer::create(1,64);
-    Layer* l2 = Layer::create(64,64);
-    Layer* l3 = Layer::create(64,1);
+    Layer* l1 = Layer::create(1,8);
+    Layer* l2 = Layer::create(8,8);
+    Layer* l3 = Layer::create(8,1);
 
     M x[600] = {};
     M y[600] = {};
@@ -917,7 +784,7 @@ int main() {
     u32 epochs = 100;
 
     u32 memoryCheckPoint = MemoryArena.Used;
-    #define TRAINING 0
+    #define TRAINING 1
     #if TRAINING
     for(u32 i=0;i<epochs;++i){
         f32 error = 0.0f;
@@ -958,13 +825,13 @@ int main() {
         std::printf("Epochs[%d/%d] loss: %f\n", i, epochs, error / 600.0f);
     }
 
-    l1->w.print();
-    l2->w.print();
-    l3->w.print();
+    // l1->w.print();
+    // l2->w.print();
+    // l3->w.print();
 
-    l1->b.print();
-    l2->b.print();
-    l3->b.print();
+    // l1->b.print();
+    // l2->b.print();
+    // l3->b.print();
 
     l1->w.store("w1");
     l1->b.store("b1");

@@ -1,6 +1,6 @@
 #ifndef M3_HH
 #define M3_HH
-#include "M.cpp"
+#include "M.h"
 struct M3{
     f32* data;  
     u32 d1;

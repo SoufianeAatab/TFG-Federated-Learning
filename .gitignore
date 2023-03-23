@@ -5,5 +5,9 @@ nn
 a.out
 model.h
 creditcard.csv
+mydataset/
 *.cpp.o
 .pio/
+
+face*
+mask*

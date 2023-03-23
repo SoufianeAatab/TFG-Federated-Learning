@@ -1,6 +1,6 @@
 #ifndef M4_HH
 #define M4_HH
-#include "M3.cpp"
+#include "M3.h"
 struct M4{
     f32* data;  
     u32 d1;
