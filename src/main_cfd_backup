@@ -4,6 +4,10 @@
 #define ONCOMPUTER 0
 #include "nn.h"
 
+static Layer* l1;  
+static Layer* l2;
+static Layer* l3;
+static Layer* l4;
 
 static u32 memoryUsed = 0;
 static f32 lr = 0.00001f;
@@ -46,21 +50,20 @@ static scaledType microphone_audio_signal_get_data(size_t offset, size_t length,
     numpy::int16_to_float(&inference.buffer[offset], out_ptr, length);
     return 0;
 }
-
-static Conv2D* cnv;
-static MaxPooling* pl;
-static Layer* llinear;
-static Layer* loutput;
-
-
 void setup(){
+    // Serial.begin(9600);
+    // InitMemory(1024 * 260);
+
+    // l1 = Layer::create(4,32);
+    // l2 = Layer::create(32,3);
+
     Serial.begin(9600);
     InitMemory(1024 * 260);
 
-    cnv = Conv2D::Create(28,28,1,   3, 3, 8);
-    pl = MaxPooling::create(cnv->getOutputSize().h, cnv->getOutputSize().w, cnv->getOutputSize().c, 3,3);
-    llinear = Layer::create(pl->getLinearFlattenedSize(), 16);
-    loutput = Layer::create(16, 10);
+    l1 = Layer::create(29,20);
+    l2 = Layer::create(20,14);
+    l3 = Layer::create(14,20);
+    l4 = Layer::create(20,29);
 
     memoryUsed = MemoryArena.Used;
 

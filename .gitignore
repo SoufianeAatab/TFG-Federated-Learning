@@ -9,5 +9,9 @@ mydataset/
 *.cpp.o
 .pio/
 
+datasets/
+datasets_2/
+plots/
+
 face*
 mask*

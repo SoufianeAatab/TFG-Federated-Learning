@@ -282,5 +282,4 @@ struct M
     }
 };
 
-
 #endif

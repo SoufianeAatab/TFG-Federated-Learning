@@ -5,6 +5,8 @@
 #include <chrono>
 #include <stdint.h>
 
+#define USEMOMENTUM 1
+
 #if ONCOMPUTER
 #include <random>
 #include <fstream>
@@ -58,9 +60,6 @@ static f32 randLowVal = 0;
 static f32 randHighVal = 0;
 static f32 scale = 0.0f;
 
-
-
-
 #if ONCOMPUTER
 f32 uniform_rand(){
     static std::mt19937 gen(1);
@@ -80,9 +79,6 @@ struct M
     f32 *data;
     u32 rows;
     u32 cols;
-
-    // M (const M&) = delete;
-    // M& operator= (const M&) = delete;
 
     M() = default;
     M(f32 *data, u32 rows, u32 cols) : data(data), rows(rows), cols(cols) {}
@@ -126,7 +122,7 @@ struct M
 
     void shape()
     {
-        std::printf("Shape: (%lu, %lu)\n", rows, cols);
+        std::printf("Shape: (%u, %u)\n", rows, cols);
     }
 
     void print()
@@ -196,15 +192,15 @@ struct M
         return *this;
     }
 
-    M operator-()
-    {
-        M out = M::zeros(rows, cols);
-        for (u32 i = 0; i < rows * cols; ++i)
-        {
-            out.data[i] = -data[i];
-        }
-        return out;
-    }
+    // M operator-()
+    // {
+    //     M out = M::zeros(rows, cols);
+    //     for (u32 i = 0; i < rows * cols; ++i)
+    //     {
+    //         out.data[i] = -data[i];
+    //     }
+    //     return out;
+    // }
 
     M operator/(M B)
     {
@@ -218,6 +214,7 @@ struct M
 
     M operator*(M B)
     {
+        assert(B.rows == rows && B.cols == cols);
         M out = M::zeros(rows, cols);
         for (u32 i = 0; i < rows * cols; ++i)
         {
@@ -228,6 +225,7 @@ struct M
 
     M operator+(M B)
     {
+        assert(B.rows == rows && B.cols == cols);
         M out = M::zeros(rows, cols);
         for (u32 i = 0; i < rows * cols; ++i)
         {
@@ -437,6 +435,16 @@ struct M3{
         return out;
     }
 
+    M3 operator+(M3 B)
+    {
+        assert(B.d1 == d1 && B.d2 == d2 && B.d3 == d3);
+        M3 out = M3::zeros(d1,d2,d3);
+        for (u32 i = 0; i < d1 * d2 * d3; ++i){
+            out.data[i] = data[i] + B.data[i];
+        }
+        return out;
+    }
+
     M3 operator*(f32 B)
     {
         M3 out = M3::zeros(d1,d2,d3);
@@ -455,6 +463,7 @@ struct M3{
     }
 
     void print(){
+        this->shape();
         for(u32 i=0;i<d1;++i){
             std::printf("[\n");
             for(u32 j=0;j<d2;++j){
@@ -475,6 +484,23 @@ struct M3{
 
         M o = M(data+index, d2,d3);
         return o;
+    }
+    
+    f32 std(){
+        f32 sum = 0.0f;
+        u32 n = d1 * d2 * d3;
+        for (u32 i = 0; i < d1 * d2 * d3; ++i)
+        {
+            sum += data[i];
+        }
+
+        f32 mean = sum / n;
+        f32 sd = 0.0f;
+        for(u32 i = 0; i < d1 * d2 * d3; i++) {
+            sd += pow(data[i] - mean, 2);
+        }
+
+        return sqrt(sd / (f32)n);
     }
 
     #if ONCOMPUTER
@@ -575,11 +601,14 @@ struct M4{
     }
 
     f32 operator()(u32 l, u32 k, u32 j, u32 i){
+        //assert(i < d1 && j < d2 && k < d3 && l < d4);
         u32 index = l * (d4*d2*d3) + k * (d4*d3) + j*d4 + i;
         return data[index];
     }
 
     void set(u32 l, u32 k, u32 j, u32 i, f32 val){
+        //assert(i < d1 && j < d2 && k < d3 && l < d4);
+
         u32 index = l * (d4*d2*d3) + k * (d4*d3) + j*d4 + i;
         data[index] = val;
     }
@@ -640,6 +669,7 @@ struct M4{
                     std::printf("[");
                     for(u32 l=0;l<d4;++l){
                         u32 index = i * (d4*d2*d3) + j * (d4*d3) + k*d4 + l;
+                        //u32 index = i * (d4*d2*d3) + j * (d4*d3) + k*d4 + l;
                         std::printf("%f, ",data[index]);
                     }   
                     std::printf("],\n");
@@ -680,8 +710,64 @@ struct M4{
         }
         infile.close();
     }
+
     #endif
 };
+
+M4 operator*(f32 scalar, M4 rhs)
+{
+    M4 output = M4::zeros(rhs.d1,rhs.d2,rhs.d3,rhs.d4);
+    for (u32 i = 0; i < rhs.d1 * rhs.d2*rhs.d3*rhs.d4; ++i)
+    {
+        output.data[i] = rhs.data[i] * scalar;
+    }
+    return output;
+}
+
+M4 operator-(M4 lhs, M4 rhs)
+{
+    //assert();
+    M4 output = M4::zeros(rhs.d1,rhs.d2,rhs.d3,rhs.d4);
+    for (u32 i = 0; i < rhs.d1 * rhs.d2*rhs.d3*rhs.d4; ++i)
+    {
+        output.data[i] = lhs.data[i] - rhs.data[i];
+    }
+    return output;
+}
+
+M3 operator*(f32 scalar, M3 rhs)
+{
+    M3 output = M3::zeros(rhs.d1,rhs.d2,rhs.d3);
+    for (u32 i = 0; i < rhs.d1 * rhs.d2*rhs.d3; ++i)
+    {
+        output.data[i] = rhs.data[i] * scalar;
+    }
+    return output;
+}
+
+M3 operator-(M3 lhs, M3 rhs)
+{
+    //assert();
+    M3 output = M3::zeros(rhs.d1,rhs.d2,rhs.d3);
+    for (u32 i = 0; i < rhs.d1 * rhs.d2*rhs.d3; ++i)
+    {
+        output.data[i] = lhs.data[i] - rhs.data[i];
+    }
+    return output;
+}
+
+
+M operator*(f32 scalar, M rhs)
+{
+    M output = M::zeros(rhs.rows,rhs.cols);
+    for (u32 i = 0; i < rhs.rows * rhs.cols; ++i)
+    {
+        output.data[i] = rhs.data[i] * scalar;
+    }
+    return output;
+}
+
+
 #define MT_N 624
 #define MT_M 397
 
@@ -758,17 +844,29 @@ void XavierInitialization(M data, f32 fan_in, f32 fan_out, f32 min_val, f32 max_
     }
 }
 
+f32 clip_by_value(f32 val, f32 min, f32 max){
+    if (val > max){
+        return max;
+    } 
+    if(val < min){
+        return min;
+    }
+
+    return val;
+}
+
 
 // This function computes the Cross Entropy loss between two sets of outputs, y and y_hat.
 f32 CrossEntropy(M y, M y_hat)
 {
     // Initialize the loss to zero.
     f32 loss = 0;
+    
     // Loop through each output in the target y and predicted y_hat.
     for (u32 i = 0; i < y.cols; i++)
     {
         // The 1e-9 is added to avoid log(0) which would result in a NaN (Not a Number) value.
-        loss += y[i] * log(y_hat[i] + 1e-9);
+        loss += y[i] * log(clip_by_value(y_hat[i],1e-7, 1.0f - 1e-7 ) );
     }
     // Return the negative of the loss.
     return -loss;
@@ -782,7 +880,7 @@ M CrossEntropyPrime(M y, M y_hat)
     for (u32 i = 0; i < y.cols; i++)
     {
         // The 1e-15 is added to avoid division by zero.
-        out.data[i] = -y[i] / (y_hat[i] + 1e-15);
+        out.data[i] = -y[i] / (clip_by_value(y_hat[i],1e-7, 1.0f - 1e-7 ));
     }
     return out;
     // return -(y / y_hat);
@@ -795,8 +893,9 @@ f32 BinaryCrossEntropyLoss(M y, M y_hat)
     for (u32 i = 0; i < y.cols; i++)
     {
         // Add a small value to avoid taking the log of zero.
-        const f32 eps = 1e-15;
-        loss += -(y[i] * log(y_hat[i] + eps) + (1 - y[i]) * log(1 - y_hat[i] + eps));
+        const f32 eps = 1e-7;
+        y_hat[i] = clip_by_value(y_hat[i],1e-7, 1.0f - 1e-7 );
+        loss += -(y[i] * log(y_hat[i]) + (1 - y[i]) * log(1 - y_hat[i]));
     }
     
     return loss / y.cols;
@@ -810,8 +909,10 @@ M BinaryCrossEntropyPrime(M y, M y_hat)
     for (u32 i = 0; i < y.cols; i++)
     {
         // Add a small value to avoid division by zero.
-        const double eps = 1e-15;
-        out.data[i] = (y_hat[i] - y[i]) / (y_hat[i] * (1 - y_hat[i]) + eps);
+        const double eps = 1e-7;
+        y_hat[i] = clip_by_value(y_hat[i],1e-7, 1.0f - 1e-7 );
+
+        out.data[i] = (y_hat[i] - y[i]) / (y_hat[i] * (1 - y_hat[i]));
     }
     
     return out;
@@ -1035,20 +1136,22 @@ struct Layer
 
 #if GLOROT_UNIFORM
         // Initialize the weight matrix with Glorot uniform distribution
-        setGlorotUniform(input_size, output_size);
+        //setGlorotUniform(input_size, output_size);
 #else
         //setRandomUniform(-0.5, 0.5);
 #endif
         // Initialize the weight and bias matrices with random values
         l->w = M::rand(input_size, output_size);
+#if ONCOMPUTER
         XavierInitialization(l->w, input_size, output_size, -1.0f, 1.0f);
+#endif
         l->b = M::zeros(1, output_size);
 
         // Initialize the gradient matrices to zero
         l->dw = M::zeros(input_size, output_size);
         l->db = M::zeros(1, output_size);
 
-        // Initialize the momentum matrices to zero
+        // // Initialize the momentum matrices to zero
         l->vdw = M::zeros(input_size, output_size);
         l->vdb = M::zeros(1, output_size);
         return l;
@@ -1137,21 +1240,22 @@ struct Layer
         // scale the learning rate by the batch size. By default, the batch size is set to 1.
         lr = lr * (1.0f / (f32)batchsize);
 
-        // MOMENTUM
-        vdw = vdw * 0.9f + dw * (1.0f-0.9f);  
-        vdb = vdb * 0.9f + db * (1.0f-0.9f);  
+        // // MOMENTUM
+        f32 momentum = 0.9f;
+        // vdw = (vdw * momentum) + (dw * 0.1f);
+        // vdb = (vdb * momentum) + (db * 0.1f);
 
         for (u32 i = 0; i < w.rows; ++i)
         {
             for (u32 j = 0; j < w.cols; ++j)
             {
                 // Update weights
-                //w.data[i * w.cols + j] -= lr * this->dw[i * this->dw.cols + j];
-                w.data[i * w.cols + j] -= lr * this->vdw[i * this->vdw.cols + j];
+                w.data[i * w.cols + j] -= lr * this->dw[i * this->dw.cols + j];
+                //w.data[i * w.cols + j] -= lr * this->vdw[i * this->vdw.cols + j];
             }
             // Update bias
-            //b.data[i] -= lr * this->db[i];
-            b.data[i] -= lr * this->vdb.data[i];
+            b.data[i] -= lr * this->db[i];
+            //b.data[i] -= lr * this->vdb.data[i];
         }
     }
 
@@ -1182,5 +1286,321 @@ struct Layer
     }
 };
 
+struct Size3D{
+    i32 h;
+    i32 w;
+    i32 c;
+};
+
+Size3D get_output_from_kernel(u32 ih, u32 iw, u32 kh, u32 kw, u32 kc){
+    Size3D output;
+    output.c = kc;
+    output.h = ih - kh + 1;
+    output.w = iw - kw + 1;
+    return output;
+}
+
+struct Conv2D{
+    Size3D input_size;
+    Size3D output_size;
+    u32 numKernels;
+    u32 stride;
+
+    M4 kernels;
+    M4 dkernels;
+
+    M bias;
+    M db;
+    
+    M4 vdkernels;
+    M vdb;
+    //M kernels[outputChannels][inputChannels];
+    //M dkernels[outputChannels][inputChannels];
+
+    // Factory function to create a new layer object
+    static Conv2D *Create(u32 h, u32 w, u32 c, u32 kh, u32 kw, u32 kc)
+    {
+        // Allocate memory for the layer on the memory arena
+        Conv2D *l = (Conv2D *)PushSize(&MemoryArena, sizeof(Conv2D));
+
+        l->input_size.c = c;
+        l->input_size.h = h;
+        l->input_size.w = w;
+
+        l->numKernels = kc;
+        
+        l->output_size = get_output_from_kernel(h, w, kh, kw, kc);
+        //setGlorotUniform(kh * kw * c, kh * kw * kc);
+
+        l->kernels = M4::zeros(kh, kw, c, kc);
+        XavierInitialization(l->kernels,kh * kw * c, kh * kw * kc, -1.0f, 1.0f);
+
+        l->dkernels = M4::zeros(kh, kw, c, kc);
+        l->vdkernels = M4::zeros(kh, kw, c, kc);
+        l->vdb = M::zeros(1, kc);
+        
+        l->bias = M::zeros(1, kc);
+        l->db = M::zeros(1, kc);
+
+        l->stride = 1;
+        return l;
+    }
+
+    // CONVOLVE2D CORRECT (COMPARED WITH KERAS)
+    M3 convolve2D(M3 input){
+        //std::printf("%u, %u, %u   =   %u, %u, %u,\n",    input.d1, input.d2, input.d3, input_size.h, input_size.h, input_size.c);
+        assert(input_size.c > 0 && input.d3 == input_size.c  && input.d1 == input_size.h && input.d2 == input_size.w && "Input image mismatch layer");
+
+        // TODO: add padding
+        const Size3D output_size = this->output_size;
+        const u32 stride = 1;
+
+        const u32 input_channels = this->input_size.c;
+        const u32 output_channels = this->output_size.c;
+
+        M3 output = M3::zeros(output_size.h, output_size.w, output_size.c);
+        for(u32 j=0;j<output_channels;++j){
+            for (u32 h=0;h<output_size.h;++h) {
+                for( u32 w=0;w<output_size.w;++w){
+                    f32 s = 0;
+                    for(u32 i=0;i<input_channels;++i){
+                        u32 w_start = w * stride;
+                        u32 h_start = h * stride;
+                        for(u32 l=0;l<kernels.d1;++l) {
+                            for(u32 m=0;m<kernels.d2;++m) {
+                                // TODO: should check for borders?
+                                    // To conv: perform element-wise multiplication of the slices of the prev (input) matrix
+                                    // then sum up all the values from all channels, add the bias to the sum of convolutions for each output channel
+                                s += input(l+h_start,m+w_start,i) * kernels(l,m,i,j);
+                            }
+                        }
+                        s += bias.data[j]; 
+                    }
+                    output.set(h,w,j, s);
+                    //output[j].data[(output_size.w * h) + w] = s;
+                }
+            }
+        }
+        return output;
+    }
+
+    Size3D getInputSize() const {
+        return this->input_size;
+    }
+
+    Size3D getOutputSize() const {
+        return this->output_size;
+    }
+
+    u32 getLinearFlattenedSize() const {
+        return this->output_size.c * this->output_size.h * this->output_size.w;
+    }
+
+    M3 backward_conv(M3 X, M3 dh){
+        //std::printf("%d=%d, %d=%d, %d=%d, %d=%d\n", dh.d1, this->output_size.c, dh.d2, this->output_size.h, dh.d3, this->output_size.w, this->numKernels, dh.d1);
+        assert(dh.d3 == this->numKernels && this->output_size.c == dh.d3 && dh.d1 == this->output_size.h && dh.d2 == this->output_size.w && "BACKWARD CONV ASSERT");
+        assert(this->input_size.c == X.d3);
+        const u32 input_h = this->input_size.h;
+        const u32 input_w = this->input_size.w;
+
+        const u32 output_w = this->output_size.w;
+        const u32 output_h = this->output_size.h;
+
+        const u32 k_h = input_h - output_h + 1;
+        const u32 k_w = input_w - output_w + 1;
+
+        M3 dx = M3::zeros(input_h,input_w, this->input_size.c);
+
+        assert(input_h == X.d1 && input_w == X.d2 && X.d3 == this->input_size.c);
+
+        for(u32 p=0;p<this->numKernels;++p){
+            f32 bias = 0.0f;
+            for (int c=0;c<this->input_size.c;++c){
+                bias = 0.0;
+                for (int i = 0; i < output_h; i++) {
+                    for (int j = 0; j < output_w; j++) {
+                        bias += dh(i,j,p);
+                        for (int k = 0; k < k_h; k++) {
+                            for (int l = 0; l < k_w; l++) {
+                                if(i+k<input_h && j+l < input_w){
+                                    dx.set(i+k,j+l,c, dx(i+k,j+l,c) + (dh(i, j, p) * kernels(k,l,c,p)));
+                                }
+
+                                //std::printf("dw[%u,%u] = dh[%u,%u] * f[%u,%u] = %f\n", k,l, i,j, i+k, j+l, X(i+k,j+l,c) * dh(i,j,p));
+                                dkernels.set(k,l,c,p, dkernels(k,l,c,p) + dh(i, j, p) * X(i+k, j+l, c));
+
+                            }
+                        }
+                    }
+                }
+            }
+            db.data[p] += bias;
+        }
+
+        return dx;
+    }
+
+    void resetGradients(){
+        const u32 input_h = this->input_size.h;
+        const u32 input_w = this->input_size.w;
+
+        const u32 output_w = this->output_size.w;
+        const u32 output_h = this->output_size.h;
+
+        const u32 k_h = input_h - output_h + 1;
+        const u32 k_w = input_w - output_w + 1;
+        dkernels = M4::zeros(k_h, k_w, input_size.c, numKernels);
+        db = M::zeros(1, numKernels);
+    }
+
+    void updateKernels(f32 lr, u32 batch_size = 1){
+        // const u32 output_w = this->output_size.w;
+        // const u32 output_h = this->output_size.h;
+
+        // vdkernels   = vdkernels * 0.9f - lr * dkernels;
+        // vdb         = vdb       * 0.9f - lr * db;
+        
+        // kernels = kernels + vdkernels;
+        // bias = bias + vdb;
+        lr = lr * (1.0f / (f32) batch_size);
+        // f32 momentum = 0.9f;
+        // vdkernels = vdkernels * momentum + dkernels * 0.1f;
+        // vdb = vdb * momentum + db * 0.1f;
+
+        // Update the kernels and bias using the momentum variables
+        kernels -= dkernels * lr;
+        bias -= db * lr;
+
+        // kernels -= dkernels * lr;
+        // bias -= db * lr;
+        // for(u32 p=0;p<this->numKernels;++p){
+        //     for (int c=0;c<this->input_size.c;++c){
+        //         for (int i = 0; i < output_h; i++) {
+        //             for (int j = 0; j < output_w; j++) {
+        //                 f32 old = kernels(p,c,i,j);
+        //                 f32 dk = dkernels(p,c,i,j);
+              
+        //                 kernels.set(p,c,i,j, old - dk * lr);
+        //             }
+        //         }
+        //     }
+        // }
+    }
+};
+
+struct MaxPooling{
+    Size3D kernelsize;
+    Size3D inputsize;
+    Size3D outputsize;
+    M3 grad_input;
+    M3 d;
+    static MaxPooling* create(i32 h, i32 w, i32 channels, i32 kh, i32 kw){
+        assert(h > 0 && channels > 0 && w > 0);
+        MaxPooling *l = (MaxPooling *)PushSize(&MemoryArena, sizeof(MaxPooling));
+        //setRandomUniform(-0.05, 0.05);
+
+        l->d = M3::zeros(channels, h, w);
+
+        l->kernelsize.h = kh;
+        l->kernelsize.w = kw;
+
+        l->inputsize.c = channels;
+        l->inputsize.h = h;
+        l->inputsize.w = w;
+        
+        int output_height = h / kh;
+        int output_width =  w / kw;
+        
+        l->outputsize.h = output_height;
+        l->outputsize.w = output_width;
+        l->outputsize.c = channels;
+        l->grad_input = M3::zeros(l->inputsize.h, l->inputsize.w, l->inputsize.c);
+
+        return l;
+    }
+
+    u32 getLinearFlattenedSize(){
+        return outputsize.h * outputsize.w * outputsize.c;
+    }
+
+    Size3D getOutputSize(){
+        return outputsize;
+    }
+
+    void resetGradients(){
+        grad_input = M3::zeros(inputsize.h, inputsize.w, inputsize.c);
+    }
+
+    M3 forward(M3 x){
+        assert(x.d1 == inputsize.h && x.d2 == inputsize.w && x.d3 == inputsize.c);
+        // u32 output_h = outputsize.h;
+        // u32 output_w = outputsize.w;
+
+        u32 upsampling_width = (inputsize.w / 2) * 2;
+        u32 upsampling_height = (inputsize.h / 2) * 2;
+
+        d = M3::zeros(upsampling_height, upsampling_width, inputsize.c);
+        int input_h = x.d1;
+        int input_w = x.d2;
+        int input_c = x.d3;
+
+        u32 stride = kernelsize.w;
+        u32 kernel_size = stride;
+
+        int output_h = (input_h - kernel_size) / stride + 1;
+        int output_w = (input_w - kernel_size) / stride + 1;
+        int output_c = input_c;
+
+        M3 output = M3::zeros(output_h, output_w, output_c);
+        M3 indices = M3::zeros(output_h, output_w, output_c);
+
+        for (int k = 0; k < output_c; ++k) {
+            for (int i = 0; i < output_h; ++i) {
+                for (int j = 0; j < output_w; ++j) {
+                    float max_val = -1e12;
+                    int max_idx_i = -1, max_idx_j = -1;
+                    for (int p = i*stride; p < i*stride+kernel_size; ++p) {
+                        for (int q = j*stride; q < j*stride+kernel_size; ++q) {
+                            if (x(p, q, k) > max_val) {
+                                max_val = x(p, q, k);
+                                max_idx_i = p;
+                                max_idx_j = q;
+                            }
+                        }
+                    }
+                    output.set(i, j, k, max_val);
+                    d.set(i, j, k,max_idx_i*input_w + max_idx_j) ;
+                }
+            }
+        }
+        
+        //indices.print();
+        return output;
+    }
+
+    M3 backward(M3 grad_output){
+        M3 output = M3::zeros(d.d1, d.d2, d.d3);
+        u32 output_h = grad_output.d1;
+        u32 output_w = grad_output.d2;
+        u32 kernel_size = kernelsize.h;
+        u32 stride = kernel_size;
+
+        for (u32 i = 0; i < inputsize.c; ++i) {
+            for (u32 l = 0; l < output_h; ++l) {
+                for (u32 p = 0; p < output_w; ++p) {
+                    u32 index = d(l, p, i);
+
+                    u32 row = index / inputsize.w;
+                    u32 col = index % inputsize.w;
+
+                    grad_input.set(row, col, i, grad_input(row,col,i) + grad_output(l, p, i));
+                }
+            }
+        }
+
+        return grad_input;
+        //std::printf("%u, %u, %u, %u\n", grad.d1, grad.d2, grad.d3, u);
+    }
+};
 #endif
 

@@ -1,1 +1,1 @@
-clang++ nn.cpp -O3 -std=c++11 -o nn
+clang++ face_detection.cpp -O3 -std=c++11 -o nn
