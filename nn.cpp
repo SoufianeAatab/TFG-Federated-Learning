@@ -484,6 +484,21 @@ void creditcardFraudAutoEncoder()
     Layer *l2 = Layer::create(30, 20);
     Layer *l3 = Layer::create(20, 30);
     Layer *l4 = Layer::create(30, 29);
+    std::printf("MAXPOOL SIZE %lu\n", MemoryArena.Used - dataUsed);
+
+    // 10440*2 + 7200*2
+    // 720 + 588
+    // 29*30*4*3 + 30*4*3
+    // 30*20*4*3 + 20*4*3
+    // 20*30*4*3 + 30*4*3
+    // 30*29*4*3 + 29*4*3
+
+    // Memory used:36972
+    // Memory used forward:50912
+    // Memory used backward:63748
+    // Memory used backward update weights:63980
+
+
 
     u32 MemoryUsed = MemoryArena.Used;
 
@@ -573,6 +588,7 @@ void creditcardFraudAutoEncoder()
                 epoch, epochs, batchsize, error / (f32)m, valid_error / (f32) m_valid ,lr);
     }
 
+ 
     // X_train[0].print();
     // M a = Tanh(l1->forward(X_train[0]));
     // M b = Tanh(l2->forward(a));
