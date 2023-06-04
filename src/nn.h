@@ -869,16 +869,16 @@ f32 CrossEntropy(M y, M y_hat)
         loss += y[i] * log(clip_by_value(y_hat[i],1e-7, 1.0f - 1e-7 ) );
     }
 
-    // Apply L2 regularization
-    f32 regularization = 0;
-    f32 lambda = 1e-3;
-    for (u32 i = 0; i < y.cols; i++)
-    {
-        regularization += lambda * (y_hat[i] * y_hat[i]);  // L2 regularization term
-    }
+    // // Apply L2 regularization
+    // f32 regularization = 0;
+    // f32 lambda = 1e-3;
+    // for (u32 i = 0; i < y.cols; i++)
+    // {
+    //     regularization += lambda * (y_hat[i] * y_hat[i]);  // L2 regularization term
+    // }
     
-    // Add the L2 regularization term to the loss
-    loss += 0.5 * regularization;
+    // // Add the L2 regularization term to the loss
+    // loss += 0.5 * regularization;
     
     // Return the negative of the loss.
     return -loss;
@@ -895,12 +895,12 @@ M CrossEntropyPrime(M y, M y_hat)
         out.data[i] = -y[i] / (clip_by_value(y_hat[i],1e-7, 1.0f - 1e-7 ));
     }
 
-    f32 lambda = 1e-3;
-    // Apply L2 regularization to the loss
-    for (u32 i = 0; i < y.cols; i++)
-    {
-        out.data[i] += lambda * y_hat[i];  // Add the L2 regularization term
-    }
+    // f32 lambda = 1e-3;
+    // // Apply L2 regularization to the loss
+    // for (u32 i = 0; i < y.cols; i++)
+    // {
+    //     out.data[i] += lambda * y_hat[i];  // Add the L2 regularization term
+    // }
     
     return out;
     // return -(y / y_hat);
@@ -1262,20 +1262,20 @@ struct Layer
 
         // // MOMENTUM
         f32 momentum = 0.9f;
-        // vdw = (vdw * momentum) + (dw * 0.1f);
-        // vdb = (vdb * momentum) + (db * 0.1f);
+        vdw = (vdw * momentum) + (dw * 0.1f);
+        vdb = (vdb * momentum) + (db * 0.1f);
 
         for (u32 i = 0; i < w.rows; ++i)
         {
             for (u32 j = 0; j < w.cols; ++j)
             {
                 // Update weights
-                w.data[i * w.cols + j] -= lr * this->dw[i * this->dw.cols + j];
-                //w.data[i * w.cols + j] -= lr * this->vdw[i * this->vdw.cols + j];
+                //w.data[i * w.cols + j] -= lr * this->dw[i * this->dw.cols + j];
+                w.data[i * w.cols + j] -= lr * this->vdw[i * this->vdw.cols + j];
             }
             // Update bias
-            b.data[i] -= lr * this->db[i];
-            //b.data[i] -= lr * this->vdb.data[i];
+            //b.data[i] -= lr * this->db[i];
+            b.data[i] -= lr * this->vdb.data[i];
         }
     }
 

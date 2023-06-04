@@ -23,7 +23,7 @@ struct train_data_cnn{
 #define SIZE 28
 #define CHANNELS 1
 #define KERNEL_SIZE 5
-#define OUT_CHANNELS 8
+#define OUT_CHANNELS 4
 
 static bool debug_nn = false; // Set this to true to see e.g. features generated from the raw signal
 
@@ -48,16 +48,16 @@ static bool debug_nn = false; // Set this to true to see e.g. features generated
 static Conv2D* cnv1;
 static MaxPooling* pl1;
 static Layer* l0;
-static Layer* l1;
+//static Layer* l1;
 
 void setup(){
     Serial.begin(9600);
     InitMemory(1024 * 430);
 
     cnv1 = Conv2D::Create(SIZE,SIZE,CHANNELS,   KERNEL_SIZE,KERNEL_SIZE, OUT_CHANNELS);
-    pl1 = MaxPooling::create(cnv1->getOutputSize().h, cnv1->getOutputSize().w, cnv1->getOutputSize().c, 3,3);
-    l0 = Layer::create(pl1->getLinearFlattenedSize(), 8);
-    l1 = Layer::create(8, 10);
+    pl1 = MaxPooling::create(cnv1->getOutputSize().h, cnv1->getOutputSize().w, cnv1->getOutputSize().c, 2,2);
+    l0 = Layer::create(pl1->getLinearFlattenedSize(), 10);
+    //l1 = Layer::create(8, 10);
 
     memoryUsed = MemoryArena.Used;
 
@@ -355,18 +355,18 @@ void initNetworkModel(){
 
 
     // How many layers?
-    sendInt(4);
+    sendInt(3);
     sendLayerMetaData(cnv1);
     sendLayerMetaData(pl1);
     sendLayerMetaData(l0);
-    sendLayerMetaData(l1);
+    //sendLayerMetaData(l1);
 
 
     // TODO : Change to read_weights(l1): this will read bias and weights within the same function.
     read_layer_weights(cnv1);
     //read_layer_weights(pl1);
     read_layer_weights(l0);
-    read_layer_weights(l1);
+    //read_layer_weights(l1);
     // read_bias(l1);
     // read_weights(l1);
 
@@ -481,29 +481,30 @@ void sendInt (int arg)
     Serial.write (data, sizeof (arg));
 }
 
-f32 train(M3 input, M target){
+M train(M3 input, M target, f32& loss){
     cnv1->resetGradients();
     pl1->resetGradients();
     l0->resetGradients();
-    l1->resetGradients();
+    //l1->resetGradients();
 
     M3 aa = Sigmoid(cnv1->convolve2D(input));
     M3 bb = pl1->forward(aa);
 
     M flatten(bb.data, 1, bb.d1*bb.d2*bb.d3);
     
-    M a = Sigmoid(l0->forward(flatten));
-    M c = Softmax(l1->forward(a));
+    //M a = Sigmoid(l0->forward(flatten));
+    M c = Softmax(l0->forward(flatten));
 
     M d2 = M::MatMul(CrossEntropyPrime(target, c), SoftmaxPrime(c));
-    M d1 = l1->backward(d2) * SigmoidPrime(a);
-    M d0 = l0->backward(d1);
+    //M d1 = l1->backward(d2) * SigmoidPrime(a);
+    M d0 = l0->backward(d2);
+    // M d0 = l0->backward(d1);
 
-    l1->dw = l1->getDelta(d2, a);
-    l1->db = d2;
+    // l1->dw = l1->getDelta(d2, a);
+    // l1->db = d2;
 
-    l0->dw = l0->getDelta(d1, flatten);
-    l0->db = d1;
+    l0->dw = l0->getDelta(d2, flatten);
+    l0->db = d2;
 
     M3 dcnv = M3(d0.data, bb.d1, bb.d2, bb.d3); 
     M3 bpl2 = pl1->backward(dcnv) * SigmoidPrime(aa);
@@ -511,19 +512,19 @@ f32 train(M3 input, M target){
 
     cnv1->updateKernels(lr);
     l0->UpdateWeights(lr);
-    l1->UpdateWeights(lr);
-
-    return CrossEntropy(target, c);
+    //l1->UpdateWeights(lr);
+    loss = CrossEntropy(target, c);
+    return c;
 }
 
 M predict(M3 input, M target, f32& loss){
     M3 aa = Sigmoid(cnv1->convolve2D(input));
     M3 bb = pl1->forward(aa);
     M flatten(bb.data, 1, bb.d1*bb.d2*bb.d3);
-    M a = Sigmoid(l0->forward(flatten));
-    M o = Softmax(l1->forward(a));
-    loss = CrossEntropy(target, o);
-    return o;
+    M a = Softmax(l0->forward(flatten));
+    //M o = Softmax(l1->forward(a));
+    loss = CrossEntropy(target, a);
+    return a;
 }
 
 void loop(){
@@ -532,9 +533,10 @@ void loop(){
         if(inByte == 't'){
             train_data_cnn sample = receive_sample_cnn(SIZE,SIZE,CHANNELS, 10);
             //train_data sample = receive_sample();
-            f32 error = train(sample.input, sample.target);
-            sendFloat(error);
-
+            f32 error = 0;
+            M output = train(sample.input, sample.target, error);
+            //sendFloat(error);
+            sendInferenceResult(output, error);
         } else if(inByte == 'p'){
             train_data_cnn sample = receive_sample_cnn(SIZE,SIZE,CHANNELS, 10);
 
@@ -545,12 +547,12 @@ void loop(){
             sendInferenceResult(output, loss);
             MemoryArena.Used = memoryUsed;
         } else if(inByte == 'f'){
-            // START FEDERATED LEARNING
+            initNetworkModel();
         } else if(inByte == 'g'){
             send_layer_weights(cnv1);
             //send_layer_weights(pl1);
             send_layer_weights(l0);
-            send_layer_weights(l1);
+            //send_layer_weights(l1);
             // send_weights(l1);
             // send_bias(l1);
             // send_weights(l2);
@@ -560,7 +562,7 @@ void loop(){
             read_layer_weights(cnv1);
             //read_layer_weights(pl1);
             read_layer_weights(l0);
-            read_layer_weights(l1);
+            //read_layer_weights(l1);
 
             // read_bias(l1);
             // read_weights(l1);

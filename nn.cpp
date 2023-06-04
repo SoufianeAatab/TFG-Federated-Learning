@@ -467,23 +467,23 @@ void creditcardFraudAutoEncoder()
     u32 size = 0;
     f32 *X = get_data(&size);
     assert(size > 0);
-    M X_train[227451];
-    for (u32 i = 0; i < 227451; ++i)
+    M X_train[2305];
+    for (u32 i = 0; i < 2305; ++i)
     {
-        X_train[i] = M(X + (i * 29), 1, 29);
+        X_train[i] = M(X + (i * 26), 1, 26);
     }
-    X = get_data(&size);
-    assert(size > 0);
-    M X_test[56962];
-    for (u32 i = 0; i < 56962; ++i)
-    {
-        X_test[i] = M(X + (i * 29), 1, 29);
-    }
+    // X = get_data(&size);
+    // assert(size > 0);
+    // M X_test[56962];
+    // for (u32 i = 0; i < 56962; ++i)
+    // {
+    //     X_test[i] = M(X + (i * 29), 1, 29);
+    // }
     u32 dataUsed = MemoryArena.Used;
-    Layer *l1 = Layer::create(29, 30);
+    Layer *l1 = Layer::create(26, 30);
     Layer *l2 = Layer::create(30, 20);
     Layer *l3 = Layer::create(20, 30);
-    Layer *l4 = Layer::create(30, 29);
+    Layer *l4 = Layer::create(30, 26);
     std::printf("MAXPOOL SIZE %lu\n", MemoryArena.Used - dataUsed);
 
     // 10440*2 + 7200*2
@@ -504,8 +504,8 @@ void creditcardFraudAutoEncoder()
 
     // Hyperparameters
     u32 epochs = 100;
-    f32 lr = 0.0001;
-    u32 m = 1; // 227451
+    f32 lr = 0.001;
+    u32 m = 2305; // 227451
     u32 m_valid = 1; //56962;
     u32 batchsize = 1;
 
@@ -514,49 +514,49 @@ void creditcardFraudAutoEncoder()
 
     // BEGIN_TRAIN_LOOP(m-(data_size), epochs, lr, batch_size)
 
-    for (u32 epoch = 0; epoch < 1; ++epoch) 
+    for (u32 epoch = 0; epoch < epochs; ++epoch) 
     {   
         f32 error = 0;
         f32 valid_error = 0.0f;
-        for (u32 j = 0; j < m_valid; ++j)
-        {
-            // forward propagation
-            M a = Tanh(l1->forward(X_test[j]));
-            M b = Tanh(l2->forward(a));
-            M c = Tanh(l3->forward(b));
-            M o = l4->forward(c);
-            // calculate error
-            valid_error += Mse(X_test[j], o);
+        // for (u32 j = 0; j < m_valid; ++j)
+        // {
+        //     // forward propagation
+        //     M a = Tanh(l1->forward(X_test[j]));
+        //     M b = Tanh(l2->forward(a));
+        //     M c = Tanh(l3->forward(b));
+        //     M o = l4->forward(c);
+        //     // calculate error
+        //     valid_error += Mse(X_test[j], o);
 
 
-        }
+        // }
 
-        for (u32 i = 0; i < m; i += batchsize)
+        for (u32 i = 0; i < m; ++i)
         {
             l1->resetGradients();
             l2->resetGradients();
             l3->resetGradients();
             l4->resetGradients();
 
-            for (u32 j = i; j < (i + batchsize) && j < m; ++j)
-            {
+            // for (u32 j = i; j < (i + batchsize) && j < m; ++j)
+            // {
                 // forward propagation
-                M a = Tanh(l1->forward(X_train[j]));
+                M a = Tanh(l1->forward(X_train[i]));
                 M b = Tanh(l2->forward(a));
                 M c = Tanh(l3->forward(b));
                 M o = l4->forward(c);
 
-                std::printf("Memory used forward:%lu\n", MemoryArena.Used-dataUsed);
+                //std::printf("Memory used forward:%lu\n", MemoryArena.Used-dataUsed);
 
 
                 // Backward propagation
-                M _d4 = MsePrime(X_train[j], o);
+                M _d4 = MsePrime(X_train[i], o);
                 M _d3 = l4->backward(_d4) * TanhPrime(c);
                 M _d2 = l3->backward(_d3) * TanhPrime(b);
                 M _d1 = l2->backward(_d2) * TanhPrime(a);
 
                 // accumulate gradients
-                l1->dw += l1->getDelta(_d1, X_train[j]);
+                l1->dw += l1->getDelta(_d1, X_train[i]);
                 l1->db += _d1;
 
                 l2->dw += l2->getDelta(_d2, a);
@@ -568,22 +568,144 @@ void creditcardFraudAutoEncoder()
                 l4->dw += l4->getDelta(_d4, c);
                 l4->db += _d4;
 
-                std::printf("Memory used backward:%lu\n", MemoryArena.Used-dataUsed);
+                //std::printf("Memory used backward:%lu\n", MemoryArena.Used-dataUsed);
 
                 // calculate error
-                error += Mse(X_train[j], o);
-            }
+                error += Mse(X_train[i], o);
+            // }
 
             l1->UpdateWeights(lr, batchsize);
             l2->UpdateWeights(lr, batchsize);
             l3->UpdateWeights(lr, batchsize);
             l4->UpdateWeights(lr, batchsize);
 
-            std::printf("Memory used backward update weights:%lu\n", MemoryArena.Used-dataUsed);
+            //std::printf("Memory used backward update weights:%lu\n", MemoryArena.Used-dataUsed);
 
 
             MemoryArena.Used = MemoryUsed;
         }
+        std::printf("Epoch[%i/%i] - Batch size: %u - Training Loss: %f - Valid Loss: %f - Learing rate: %f\n", 
+                epoch, epochs, batchsize, error / (f32)m, valid_error / (f32) m_valid ,lr);
+    }
+
+ 
+    // X_train[0].print();
+    // M a = Tanh(l1->forward(X_train[0]));
+    // M b = Tanh(l2->forward(a));
+    // M c = Tanh(l3->forward(b));
+    // M o = l4->forward(c);
+    // o.print();
+
+    // std::printf("Error: %f \n", Mse(X_train[0], o));
+    free(MemoryArena.Base);
+}
+
+
+void anomalyDetection()
+{// Reserve memory arena which we'll use
+    InitMemory(1024 * 1024 * 256);
+
+    u32 size = 0;
+    f32 *X = get_data(&size);
+    assert(size > 0);
+    M X_train[1844];
+    for (u32 i = 0; i < 1844; ++i)
+    {
+        X_train[i] = M(X + (i * 25), 1, 25);
+    }
+
+
+    X = get_data(&size);
+    assert(size > 0);
+    M X_test[461];
+    for (u32 i = 0; i < 461; ++i)
+    {
+        X_test[i] = M(X + (i * 25), 1, 25);
+    }
+
+    Layer *l1 = Layer::create(25, 30);
+    Layer *l2 = Layer::create(30, 25);
+    u32 MemoryUsed = MemoryArena.Used;
+
+    // Hyperparameters
+    u32 epochs = 1;
+    f32 lr = 0.1;
+    u32 m = 1844; // 227451
+    u32 m_valid = 461; //56962;
+    u32 batchsize = 1;
+
+
+    // BEGIN_TRAIN_LOOP(m-(data_size), epochs, lr, batch_size)
+
+    for (u32 epoch = 0; epoch < epochs; ++epoch) 
+    {   
+        f32 error = 0;
+
+        for (u32 i = 0; i < m; ++i)
+        {
+            l1->resetGradients();
+            l2->resetGradients();
+            // l3->resetGradients();
+            // l4->resetGradients();
+
+            // for (u32 j = i; j < (i + batchsize) && j < m; ++j)
+            // {
+                // forward propagation
+                M a = Tanh(l1->forward(X_train[i]));
+                M b = Tanh(l2->forward(a));
+                // M c = Tanh(l3->forward(b));
+                // M o = l4->forward(c);
+
+                //std::printf("Memory used forward:%lu\n", MemoryArena.Used-dataUsed);
+
+
+                // Backward propagation
+                M _d4 = MsePrime(X_train[i], b);
+                // M _d3 = l4->backward(_d4) * TanhPrime(c);
+                // M _d2 = l3->backward(_d3) * TanhPrime(b);
+                M _d1 = l2->backward(_d4) * TanhPrime(a);
+
+                // accumulate gradients
+                l1->dw += l1->getDelta(_d1, X_train[i]);
+                l1->db += _d1;
+
+                l2->dw += l2->getDelta(_d4, a);
+                l2->db += _d4;
+
+                // l3->dw += l3->getDelta(_d3, b);
+                // l3->db += _d3;
+                
+                // l4->dw += l4->getDelta(_d4, c);
+                // l4->db += _d4;
+
+                //std::printf("Memory used backward:%lu\n", MemoryArena.Used-dataUsed);
+
+                // calculate error
+                error += Mse(X_train[i], b);
+            // }
+
+            l1->UpdateWeights(lr, batchsize);
+            l2->UpdateWeights(lr, batchsize);
+            // l3->UpdateWeights(lr, batchsize);
+            // l4->UpdateWeights(lr, batchsize);
+
+            //std::printf("Memory used backward update weights:%lu\n", MemoryArena.Used-dataUsed);
+            std::printf("[%i] - LOSS: %f\r", i, error);
+
+
+            MemoryArena.Used = MemoryUsed;
+        }
+        f32 valid_error = 0.0f;
+        for (u32 j = 0; j < m_valid; ++j)
+        {
+            // forward propagation
+            M a = Tanh(l1->forward(X_test[j]));
+            M b = Tanh(l2->forward(a));
+            
+            // calculate error
+            valid_error += Mse(X_test[j], b);
+        }
+
         std::printf("Epoch[%i/%i] - Batch size: %u - Training Loss: %f - Valid Loss: %f - Learing rate: %f\n", 
                 epoch, epochs, batchsize, error / (f32)m, valid_error / (f32) m_valid ,lr);
     }
@@ -637,7 +759,7 @@ void CNN(){
     u32 epochs = EPOCHS;
     
     #if CONVNET
-    Conv2D* cnv1 = Conv2D::Create(SIZE,SIZE,1, 3,3, 16); 
+    Conv2D* cnv1 = Conv2D::Create(SIZE,SIZE,1, 3,3, 8); 
     #if POOLING
     
     MaxPooling* pl = MaxPooling::create(cnv1->getOutputSize().h, cnv1->getOutputSize().w, cnv1->getOutputSize().c, 3,3);
@@ -865,7 +987,7 @@ int main() {
 
     mt_twist(&mystate);
     mt_seed(&mystate, 1);
-    creditcardFraudAutoEncoder();
+    anomalyDetection();
 
     // Layer* l11 = Layer::create(650,25);
     // Layer* l22 = Layer::create(25,4);
